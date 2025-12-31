@@ -6,11 +6,11 @@
 
 ## Why?
 
-You know what streaming has become. Own your music, support artists directly — [Bandcamp](https://bandcamp.com), CD rips, FLAC on your hard drive.
+You know what streaming has become. Own your music, support artists directly like on [Bandcamp](https://bandcamp.com), CD rips, FLAC on your hard drive.
 
-**The problem:** switching is hard when you have thousands of saved songs.
+**The problem:** Fixed cost of switching is high when you have thousands of saved songs.
 
-**The solution:** De-Spotify is a bridge. Export your library to MP3s with full metadata, stop paying today, rebuild properly over time. A base layer to leave streaming now.
+**The solution:** De-Spotify is a bridge. Export your library to MP3s with full metadata, stop streaming today, rebuild properly over time. A base layer to leave streaming now.
 
 ---
 
@@ -292,4 +292,5 @@ Contributions are welcome! Please ensure any changes:
 ## License
 
 MIT License - This software is provided "as is", without warranty of any kind. Use at your own risk.
+
 
