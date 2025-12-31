@@ -1,3 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python3:*)",
+      "Bash(head:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git restore:*)",
+      "Bash(git commit:*)"
+    ]
+  },
   "enableAllProjectMcpServers": false
 }
