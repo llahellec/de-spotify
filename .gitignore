@@ -7,7 +7,12 @@ __pycache__/
 build/
 develop-eggs/
 dist/
-downloads/
+
+# Downloads folder - ignore contents but keep structure
+downloads/**
+!downloads/
+!downloads/.gitkeep
+
 eggs/
 .eggs/
 lib/
@@ -46,8 +51,13 @@ env/
 credentials.json
 secrets.json
 
-# Data folder - DO NOT UPLOAD TO GITHUB
-data/
+# Data folder - ignore contents but keep structure
+data/**
+!data/
+!data/spotify_playlists/
+!data/spotify_playlists/main/
+!data/**/.gitkeep
+!data/**/*.md
 
 # All CSV files (including any outside data folder)
 *.csv

@@ -42,23 +42,87 @@ A collection of Python scripts to enrich Spotify playlist data with YouTube link
 | **yt_download.py** | Downloads audio from YouTube URLs, embeds Spotify metadata (ID3v2.3), organizes files by Artist/Album. Includes YouTube search fallback. | 3-6s delay between downloads |
 | **yt_download_test.py** | Test script for verifying download and metadata embedding works correctly. Tests both direct URL and search functionality. | N/A (test only) |
 
-## Setup
+## Quick Start
 
-1. Install dependencies:
+```bash
+# 1. Clone the repository
+git clone https://github.com/llahellec/de-spotify.git
+cd de-spotify
+
+# 2. Install Python dependencies
+pip install -r requirements.txt
+
+# 3. Install FFmpeg (required for audio conversion)
+# Windows: winget install ffmpeg
+# Linux:   sudo apt install ffmpeg
+# Mac:     brew install ffmpeg
+
+# 4. Set up your environment
+cp .env.example .env
+# Edit .env with your Discogs API credentials
+
+# 5. Add your Spotify data (see Folder Structure below)
+
+# 6. Run the scripts in order
+python code/songstats.py      # Step 1: Get YouTube URLs from Songstats
+python code/discogs.py        # Step 2: Get YouTube URLs from Discogs
+python code/merge_yt_urls.py  # Step 3: Merge all URLs
+python code/yt_download.py    # Step 4: Download music
+```
+
+## Folder Structure
+
+After cloning, your project should look like this:
+
+```
+de-spotify/
+├── code/                           # All Python scripts
+├── data/
+│   └── spotify_playlists/
+│       └── main/
+│           ├── liked.csv           # <-- PUT YOUR SPOTIFY EXPORT HERE
+│           └── EXAMPLE_STRUCTURE.md # CSV column reference
+├── downloads/                      # Downloaded MP3s will go here
+├── doc/                            # Documentation
+├── .env.example                    # Template for API credentials
+├── .env                            # Your API credentials (create this)
+└── requirements.txt
+```
+
+## Setup Details
+
+### 1. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Configure environment variables:
-   - Copy `.env.example` to `.env`
-   - Add your Discogs API credentials (get them from https://www.discogs.com/settings/developers)
+**Required packages:**
+- `pandas` - Data manipulation
+- `requests` - HTTP requests
+- `beautifulsoup4` - HTML parsing
+- `selenium` - Web scraping (for Songstats)
+- `python-dotenv` - Environment variables
+- `yt-dlp` - YouTube downloading
+- `mutagen` - MP3 metadata embedding
+
+### 2. Configure API Credentials
+
+Copy `.env.example` to `.env` and add your Discogs API credentials:
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
 ```
 
-3. Place your Spotify playlist CSV files in the `data/spotify_playlists/` directory
+Get your Discogs credentials at: https://www.discogs.com/settings/developers
+
+### 3. Prepare Your Spotify Data
+
+Export your Spotify library using [Exportify](https://exportify.net/) or similar tool.
+
+Place the CSV file in: `data/spotify_playlists/main/liked.csv`
+
+See `data/spotify_playlists/main/EXAMPLE_STRUCTURE.md` for the expected CSV format.
 
 ## Usage
 
