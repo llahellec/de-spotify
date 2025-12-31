@@ -4,45 +4,23 @@
 
 ---
 
-## Why This Project Exists
+## Why?
 
-Streaming was supposed to be the future of music. Instead, it has become a system that:
+You know why. Streaming has become rent-seeking on your own music taste — prices up, artist pay down, features removed, and you own nothing.
 
-- **Exploits artists** — Musicians earn fractions of a cent per stream. A million plays might net an artist a few thousand dollars, while platforms pocket billions.
-- **Takes away ownership** — You don't own anything. Your carefully curated library can vanish overnight when licensing deals change or services shut down.
-- **Raises prices constantly** — Subscription costs keep climbing while artist payouts stay flat.
-- **Degrades quality** — Compressed audio, algorithm-driven "recommendations" that prioritize engagement over discovery, and an experience increasingly filled with podcasts and ads.
-- **Removes features** — Lyrics paywalled, Car Thing discontinued, DJ features restricted, shuffle forced on free tiers.
-- **Tracks everything** — Your listening habits are data to be sold, analyzed, and monetized.
+The answer is simple: **own your music, support artists directly** — [Bandcamp](https://bandcamp.com), CD rips, artist websites. FLAC on your hard drive, forever.
 
-**The solution is simple: own your music and support artists directly.**
+## The Problem
 
-Buy on [Bandcamp](https://bandcamp.com) (artists keep 80-85%). Rip your CDs. Purchase from artist websites. Build a library that's truly yours — in FLAC, on your hard drive, forever.
+Switching is hard. Thousands of saved songs. Rebuilding takes time and money. You're stuck paying for something you want to leave.
 
-## The Problem: Migration Cost
+## The Solution
 
-But here's the catch: **switching is hard**.
+**De-Spotify is a bridge.**
 
-After years of streaming, you might have thousands of saved songs. Rebuilding that library ethically — buying albums, finding files — takes time and money. Meanwhile, you're stuck paying for a service you want to leave, or going without music entirely.
+Export your Spotify library to local MP3s with full metadata. Stop paying today. Keep listening. Rebuild your library properly over time — replacing files with ethical purchases as you go.
 
-## The Solution: A Bridge
-
-**De-Spotify is a transition tool.**
-
-It lets you quickly export your Spotify library to local MP3 files with full metadata, so you can:
-
-1. **Stop paying immediately** — Ditch your subscription without losing access to your music
-2. **Keep listening** — Your library works offline, on any device, forever
-3. **Rebuild gradually** — Replace YouTube-sourced files with proper purchases over time (Bandcamp FLACs, CD rips, etc.)
-4. **Support artists properly** — Use the money you save on subscriptions to buy directly from musicians
-
-This isn't meant to be your final library. It's a **base layer** — a safety net that lets you leave streaming today while you build something better tomorrow.
-
----
-
-## What This Project Does
-
-A collection of Python scripts to export Spotify playlist data, find matching YouTube URLs, download audio, and embed your Spotify metadata into local MP3 files.
+Not your final library. A **base layer** to leave streaming now while you build something better.
 
 ---
 
