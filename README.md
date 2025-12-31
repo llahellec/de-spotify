@@ -6,28 +6,11 @@
 
 ## Why?
 
-You know what streaming has become:
+You know what streaming has become. Own your music, support artists directly — [Bandcamp](https://bandcamp.com), CD rips, FLAC on your hard drive.
 
-- **Exploits artists**
-- **Takes away ownership**
-- **Raises prices constantly**
-- **Degrades quality**
-- **Removes features**
-- **Tracks everything**
+**The problem:** switching is hard when you have thousands of saved songs.
 
-The answer is simple: **own your music, support artists directly** — [Bandcamp](https://bandcamp.com), CD rips, artist websites. FLAC on your hard drive, forever.
-
-## The Problem
-
-Switching is hard. Thousands of saved songs. Rebuilding takes time and money. You're stuck paying for something you want to leave.
-
-## The Solution
-
-**De-Spotify is a bridge.**
-
-Export your Spotify library to local MP3s with full metadata. Stop paying today. Keep listening. Rebuild your library properly over time — replacing files with ethical purchases as you go.
-
-Not your final library. A **base layer** to leave streaming now while you build something better.
+**The solution:** De-Spotify is a bridge. Export your library to MP3s with full metadata, stop paying today, rebuild properly over time. A base layer to leave streaming now.
 
 ---
 
