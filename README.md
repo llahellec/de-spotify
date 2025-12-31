@@ -118,11 +118,35 @@ Get your Discogs credentials at: https://www.discogs.com/settings/developers
 
 ### 3. Prepare Your Spotify Data
 
-Export your Spotify library using [Exportify](https://exportify.net/) or similar tool.
+#### Option A: Exportify (Recommended)
 
-Place the CSV file in: `data/spotify_playlists/main/liked.csv`
+[Exportify](https://exportify.net/) is an excellent free tool that exports your Spotify playlists to CSV with all the metadata this project needs.
 
-See `data/spotify_playlists/main/EXAMPLE_STRUCTURE.md` for the expected CSV format.
+**Important: Enable all export options to get complete metadata:**
+
+1. Go to [exportify.net](https://exportify.net/)
+2. Log in with your Spotify account
+3. Before exporting, click **"Include additional data"** or similar options
+4. **Enable ISRC codes** - Required for accurate YouTube matching via Songstats
+5. **Enable album artwork URLs** - Required for embedding cover art
+6. **Enable label/copyright info** - For complete metadata embedding
+7. Export your "Liked Songs" playlist (or any playlist)
+8. Save as `liked.csv` in `data/spotify_playlists/main/`
+
+#### Option B: Spotify Web API
+
+For more control, you can use the [Spotify Web API](https://developer.spotify.com/documentation/web-api) directly:
+
+- More flexible but requires coding
+- Well documented at [developer.spotify.com](https://developer.spotify.com/documentation/web-api)
+- Requires creating a Spotify Developer application
+- Use endpoints like `/me/tracks` for liked songs, `/playlists/{id}/tracks` for playlists
+
+#### File Location
+
+Place your exported CSV file in: `data/spotify_playlists/main/liked.csv`
+
+See `data/spotify_playlists/main/EXAMPLE_STRUCTURE.md` for the expected CSV column format.
 
 ## Usage
 
@@ -174,9 +198,14 @@ pip install yt-dlp
 ```
 
 2. **Install FFmpeg** (required for audio extraction):
-   - **Windows:** Download from https://ffmpeg.org/download.html or use `winget install ffmpeg`
+   - **Windows:** `winget install ffmpeg` or download from https://ffmpeg.org/download.html
    - **Linux:** `sudo apt install ffmpeg`
    - **Mac:** `brew install ffmpeg`
+
+3. **Optional: Install a JavaScript runtime** (for full yt-dlp format support):
+   - Recent versions of yt-dlp may show warnings about missing JS runtime
+   - Install [Deno](https://deno.land/) or Node.js if you see format-related errors
+   - Downloads will still work without it in most cases
 
 ### Usage
 
