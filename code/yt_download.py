@@ -33,10 +33,12 @@ import re
 import time
 import random
 import shutil
+import tempfile
 import pandas as pd
 import requests
 from pathlib import Path
 from datetime import datetime
+from io import BytesIO
 
 try:
     import yt_dlp
@@ -82,7 +84,7 @@ except (FileNotFoundError, subprocess.CalledProcessError):
 # ---------------------------
 
 # Runtime settings
-MAX_RUNTIME_MINUTES = 5  # How long to run before stopping
+MAX_RUNTIME_MINUTES = 60  # How long to run before stopping
 SAVE_EVERY_N = 1  # Save CSV after every N downloads (1 = after each, fully resumable)
 MAX_DOWNLOADS_THIS_RUN = None  # Set to integer to limit, None for unlimited
 
@@ -660,7 +662,7 @@ def main():
             df[col] = ""
 
     # Convert columns to string type and handle NaN
-    for col in ["downloaded", "download_status", "download_date", "searched_url", "yt_url", "status", "metadata_embedded", "yt_url_origin"]:
+    for col in ["downloaded", "download_status", "download_date", "searched_url", "yt_url", "status", "metadata_embedded"]:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str)
 
