@@ -6,7 +6,14 @@
 
 ## Why?
 
-You know why. Streaming has become rent-seeking on your own music taste — prices up, artist pay down, features removed, and you own nothing.
+You know what streaming has become:
+
+- **Exploits artists**
+- **Takes away ownership**
+- **Raises prices constantly**
+- **Degrades quality**
+- **Removes features**
+- **Tracks everything**
 
 The answer is simple: **own your music, support artists directly** — [Bandcamp](https://bandcamp.com), CD rips, artist websites. FLAC on your hard drive, forever.
 
