@@ -33,12 +33,10 @@ import re
 import time
 import random
 import shutil
-import tempfile
 import pandas as pd
 import requests
 from pathlib import Path
 from datetime import datetime
-from io import BytesIO
 
 try:
     import yt_dlp
@@ -68,12 +66,23 @@ except (FileNotFoundError, subprocess.CalledProcessError):
         os.environ["PATH"] = ffmpeg_path + os.pathsep + os.environ.get("PATH", "")
         print(f"[Environment] Added ffmpeg to PATH from: {ffmpeg_path}")
 
+# Check for deno (required by yt-dlp for JavaScript runtime)
+DENO_AVAILABLE = False
+try:
+    subprocess.run(['deno', '--version'], capture_output=True, check=True)
+    DENO_AVAILABLE = True
+    print("[Environment] Deno runtime available")
+except (FileNotFoundError, subprocess.CalledProcessError):
+    print("[Environment] WARNING: Deno not found - you may see JavaScript runtime warnings")
+    print("             Install with: curl -fsSL https://deno.land/install.sh | sh")
+    print("             Or on Windows: irm https://deno.land/install.ps1 | iex")
+
 # ---------------------------
 #  2. Configuration
 # ---------------------------
 
 # Runtime settings
-MAX_RUNTIME_MINUTES = 120  # How long to run before stopping
+MAX_RUNTIME_MINUTES = 5  # How long to run before stopping
 SAVE_EVERY_N = 1  # Save CSV after every N downloads (1 = after each, fully resumable)
 MAX_DOWNLOADS_THIS_RUN = None  # Set to integer to limit, None for unlimited
 
@@ -100,7 +109,7 @@ EMBED_ALBUM_ART = True  # Download and embed album art from Spotify URL
 # Paths
 folder_path = Path(__file__).resolve().parents[1]
 input_csv = folder_path / "data/spotify_playlists/main/liked_master.csv"
-output_csv = folder_path / "data/spotify_playlists/main/liked_downloaded.csv"
+output_csv = input_csv  # Single CSV workflow - update in place (same as URL scrapers)
 download_dir = folder_path / "downloads"
 
 # ---------------------------
@@ -640,24 +649,18 @@ def main():
     download_dir.mkdir(parents=True, exist_ok=True)
     print(f"Download directory ready: {download_dir}")
 
-    # Load data - resume from output_csv if it exists, otherwise start fresh from input_csv
-    csv_to_load = output_csv if os.path.exists(output_csv) else input_csv
-    print(f"\nLoading data from: {csv_to_load}")
+    # Load data - single CSV workflow (same file for input and output)
+    print(f"\nLoading data from: {input_csv}")
 
-    if csv_to_load == output_csv:
-        print(">>> RESUMING from previous session <<<")
-    else:
-        print(">>> Starting FRESH from master file <<<")
-
-    df = pd.read_csv(csv_to_load, encoding="UTF-8")
+    df = pd.read_csv(input_csv, encoding="UTF-8")
 
     # Ensure required columns exist
-    for col in ["downloaded", "download_status", "download_date", "actual_duration", "searched_url", "metadata_embedded"]:
+    for col in ["downloaded", "download_status", "download_date", "actual_duration", "searched_url", "metadata_embedded", "yt_url_origin"]:
         if col not in df.columns:
             df[col] = ""
 
     # Convert columns to string type and handle NaN
-    for col in ["downloaded", "download_status", "download_date", "searched_url", "yt_url", "status", "metadata_embedded"]:
+    for col in ["downloaded", "download_status", "download_date", "searched_url", "yt_url", "status", "metadata_embedded", "yt_url_origin"]:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str)
 
@@ -671,6 +674,9 @@ def main():
     already_downloaded = (df["downloaded"] == "yes").sum()
     print(f"Already downloaded: {already_downloaded}")
 
+    if already_downloaded > 0:
+        print(">>> RESUMING from previous session <<<")
+
     # Identify tracks to process
     # Skip already downloaded and permanent failures
     permanent_failures = ["private_video", "unavailable", "copyright_blocked", "age_restricted"]
@@ -683,10 +689,12 @@ def main():
         (~df["download_status"].isin(permanent_failures))
     )
 
-    # Also skip tracks that have no URL AND have "no_yt" status (can't search these reliably)
+    # Tracks that can be downloaded:
+    # - Has URL: direct download
+    # - No URL but has track info: can try yt-dlp search (including no_yt status)
     can_download = (
         has_url |  # Has URL: can download directly
-        ((df["status"] == "done") | (df["status"] == "discogs_fallback"))  # Had URL source: can try search
+        (df["track_name"].str.strip() != "")  # Has track name: can try search
     )
 
     todo_mask = needs_processing & can_download
@@ -812,6 +820,31 @@ def main():
             success, status, actual_duration, video_title = download_from_url(
                 yt_url, output_template, track_name, duration_ms
             )
+
+            # FALLBACK: If duration mismatch, try YouTube search to find correct version
+            if not success and status == "duration_mismatch":
+                print(f"\n       Duration mismatch detected - trying YouTube search fallback...")
+                searched += 1
+                search_query = build_search_query(track_name, artist_names)
+                print(f"       Search query: '{search_query}'")
+
+                # Sleep before search to avoid rate limiting
+                sleep_time = random.uniform(*SLEEP_BETWEEN_SEARCHES)
+                print(f"       Waiting {sleep_time:.1f}s before search...")
+                time.sleep(sleep_time)
+
+                success, status, found_url, actual_duration = search_and_download(
+                    search_query, output_template, track_name, duration_ms
+                )
+
+                if found_url:
+                    df.at[i, "searched_url"] = found_url
+                    if success:
+                        # Update URL with the correct one from search
+                        df.at[i, "yt_url"] = found_url
+                        df.at[i, "yt_url_origin"] = "yt_search_fallback"
+                        print(f"       Updated URL in database: {found_url}")
+
         else:
             # No URL - search YouTube
             searched += 1
@@ -874,20 +907,32 @@ def main():
         else:
             df.at[i, "downloaded"] = "no"
             failed += 1
-            consecutive_failures += 1
             print(f"\n       >>> FAILED: {status} <<<")
 
-            # Check for possible rate limiting / IP ban
-            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                print(f"\n{'='*60}")
-                print(f"WARNING: {consecutive_failures} consecutive failures detected!")
-                print(f"Possible rate limiting or IP ban.")
-                print(f"Pausing for {RATE_LIMIT_PAUSE_MINUTES} minutes...")
-                print(f"{'='*60}")
-                atomic_save_csv(df, output_csv)  # Save before pause
-                time.sleep(RATE_LIMIT_PAUSE_MINUTES * 60)
-                consecutive_failures = 0  # Reset after pause
-                print(f"Resuming downloads...")
+            # Only count network/rate-limit errors toward consecutive failures
+            # These are NOT rate limit issues (don't count them):
+            non_rate_limit_errors = [
+                "duration_mismatch", "search_duration_mismatch",
+                "private_video", "unavailable", "age_restricted",
+                "copyright_blocked", "no_search_results", "no_valid_match"
+            ]
+
+            if status not in non_rate_limit_errors:
+                consecutive_failures += 1
+                # Check for possible rate limiting / IP ban
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    print(f"\n{'='*60}")
+                    print(f"WARNING: {consecutive_failures} consecutive network failures detected!")
+                    print(f"Possible rate limiting or IP ban.")
+                    print(f"Pausing for {RATE_LIMIT_PAUSE_MINUTES} minutes...")
+                    print(f"{'='*60}")
+                    atomic_save_csv(df, output_csv)  # Save before pause
+                    time.sleep(RATE_LIMIT_PAUSE_MINUTES * 60)
+                    consecutive_failures = 0  # Reset after pause
+                    print(f"Resuming downloads...")
+            else:
+                # Non-network error - reset consecutive counter
+                consecutive_failures = 0
 
         processed += 1
 
