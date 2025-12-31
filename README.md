@@ -2,12 +2,45 @@
 
 A collection of Python scripts to enrich Spotify playlist data with YouTube links and metadata from external sources (Songstats and Discogs).
 
+---
+
+## Disclaimer
+
+**IMPORTANT: Please read before using this project.**
+
+### Legal & Ethical Considerations
+
+- **Personal Use Only**: This project is intended for personal, educational, and archival purposes only. Downloading copyrighted content may be illegal in your jurisdiction.
+- **Verify Local Laws**: Laws regarding downloading audio from YouTube vary by country. It is **your responsibility** to verify what is legally permitted in your region before using these tools.
+- **Respect Copyright**: Only download content you have the right to access. Consider supporting artists by purchasing their music legally.
+- **No Warranty**: This software is provided "as is" without any warranty. The authors are not responsible for any misuse or legal consequences.
+
+### Rate Limiting & API Policies
+
+- **Respect Rate Limits**: All scripts include built-in delays between requests. **Do not disable or reduce these delays** — they exist to respect the terms of service of external APIs and websites.
+- **API Terms of Service**: When using the Discogs API, you must comply with their [Terms of Service](https://www.discogs.com/developers/#page:home,header:home-general-information). Obtain your own API credentials.
+- **YouTube ToS**: Downloading from YouTube may violate their Terms of Service. Use at your own risk.
+- **Be a Good Citizen**: Excessive scraping can harm services and lead to IP bans. The default delays (3-6 seconds between downloads) are designed to be respectful.
+
+### System Requirements
+
+- Verify that your system has the necessary permissions and software installed (Python, FFmpeg, etc.)
+- Some features may behave differently across operating systems (Windows, macOS, Linux)
+- Test with a small batch before running large operations
+
+---
+
 ## Main Scripts
 
-- **songstats.py** - Main script to fetch YouTube links from Songstats using ISRC codes
-- **discogs.py** - Main script to fetch YouTube links from Discogs API for albums
-- **merge_yt_urls.py** - Merge songstats and discogs results into a master file (prioritizes songstats)
-- **discogs_single.py** - Single album fetcher for Discogs
+| Script | Description | Rate Limit |
+|--------|-------------|------------|
+| **songstats.py** | Fetches YouTube links from Songstats using ISRC codes. Scrapes public Songstats pages to find official YouTube URLs linked to tracks. | 2-4s delay between requests |
+| **discogs.py** | Fetches YouTube links from the Discogs API by searching for albums and extracting video URLs from release pages. Requires API credentials. | 1-2s delay (API limit: 60/min) |
+| **merge_yt_urls.py** | Merges results from Songstats and Discogs into a master CSV file. Prioritizes Songstats URLs, falls back to Discogs. | N/A (local processing) |
+| **verify_merge.py** | Validates the merged CSV and reports statistics on URL coverage. | N/A (local processing) |
+| **discogs_single.py** | Fetches YouTube links for a single album from Discogs. Useful for testing or manual lookups. | 1-2s delay |
+| **yt_download.py** | Downloads audio from YouTube URLs, embeds Spotify metadata (ID3v2.3), organizes files by Artist/Album. Includes YouTube search fallback. | 3-6s delay between downloads |
+| **yt_download_test.py** | Test script for verifying download and metadata embedding works correctly. Tests both direct URL and search functionality. | N/A (test only) |
 
 ## Setup
 
@@ -67,6 +100,8 @@ python code/verify_merge.py
 
 ## Step 4: Download Music with yt-dlp
 
+> **Warning**: Downloading audio from YouTube may violate YouTube's Terms of Service and copyright laws in your jurisdiction. This feature is provided for educational purposes. Verify your local laws before use.
+
 ### Prerequisites
 
 1. **Install yt-dlp:**
@@ -99,11 +134,15 @@ Edit the following settings in `yt_download.py`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MAX_RUNTIME_MINUTES` | 120 | Auto-stop after this time |
-| `SAVE_EVERY_N` | 10 | Save CSV every N downloads |
-| `DURATION_TOLERANCE_PERCENT` | 15 | Duration matching tolerance |
-| `SLEEP_BETWEEN_DOWNLOADS` | (3, 6) | Random delay range (seconds) |
-| `AUDIO_QUALITY` | "0" | Best quality (0-10 scale) |
+| `MAX_RUNTIME_MINUTES` | 120 | Auto-stop after this time (prevents long unattended runs) |
+| `SAVE_EVERY_N` | 1 | Save CSV every N downloads (1 = fully resumable) |
+| `DURATION_TOLERANCE_PERCENT` | 15 | Duration matching tolerance for YouTube search validation |
+| `SLEEP_BETWEEN_DOWNLOADS` | (3, 6) | Random delay range in seconds. **Do not reduce below 3s** to avoid rate limiting |
+| `AUDIO_QUALITY` | "0" | Best quality (0 = best, 10 = worst) |
+| `EMBED_METADATA` | True | Embed ID3v2.3 tags (artist, album, year, etc.) from Spotify data |
+| `EMBED_ALBUM_ART` | True | Download and embed album artwork from Spotify image URLs |
+
+> **Note**: The sleep delays are intentionally set to be respectful of YouTube's servers. Reducing them may result in IP blocks or CAPTCHA challenges.
 
 ### Output
 
@@ -119,3 +158,34 @@ If you encounter HTTP 403 errors, you may need to provide a PO Token. See `doc/P
 ## Data
 
 All data files are stored in the `data/` directory and are excluded from git to protect privacy.
+
+---
+
+## Metadata Embedding
+
+The download script embeds rich metadata into MP3 files using the **ID3v2.3** standard, which is the most portable format across all music players and operating systems.
+
+**Embedded tags include:**
+- Title, Artist, Album Artist (separate fields for compilations)
+- Album, Year, Track Number, Disc Number
+- Genre (first genre from Spotify's list)
+- ISRC (International Standard Recording Code)
+- Label, Copyright
+- Album Artwork (downloaded from Spotify CDN)
+
+This allows you to rebuild your music library with full metadata from your Spotify data.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes:
+1. Maintain or increase the default rate limiting delays
+2. Do not add features that could enable mass scraping or abuse
+3. Include appropriate error handling
+
+---
+
+## License
+
+MIT License - This software is provided "as is", without warranty of any kind. Use at your own risk.
