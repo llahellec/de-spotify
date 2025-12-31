@@ -17,7 +17,7 @@ A collection of Python scripts to enrich Spotify playlist data with YouTube link
 
 ### Rate Limiting & API Policies
 
-- **Respect Rate Limits**: All scripts include built-in delays between requests. **Do not disable or reduce these delays** — they exist to respect the terms of service of external APIs and websites.
+- **Respect Rate Limits**: All scripts include built-in generous delays between requests. **Do not disable or reduce these delays** — they exist to respect the terms of service of external APIs and websites.
 - **API Terms of Service**: When using the Discogs API, you must comply with their [Terms of Service](https://www.discogs.com/developers/#page:home,header:home-general-information). Obtain your own API credentials.
 - **YouTube ToS**: Downloading from YouTube may violate their Terms of Service. Use at your own risk.
 - **Be a Good Citizen**: Excessive scraping can harm services and lead to IP bans. The default delays (3-6 seconds between downloads) are designed to be respectful.
@@ -189,3 +189,4 @@ Contributions are welcome! Please ensure any changes:
 ## License
 
 MIT License - This software is provided "as is", without warranty of any kind. Use at your own risk.
+
