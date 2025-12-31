@@ -427,8 +427,8 @@ def get_yt_dlp_options(output_template: str, progress_hook=None) -> dict:
         }],
 
         # Quiet mode with custom progress
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,
+        'no_warnings': False,
         'noprogress': False,
 
         # Safety options
@@ -516,8 +516,8 @@ def search_and_download(search_query: str, output_template: str, track_name: str
 
     # First, search and get candidates
     search_opts = {
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,
+        'no_warnings': False,
         'extract_flat': True,
         'default_search': 'ytsearch5',  # Get top 5 results
     }

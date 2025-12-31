@@ -94,8 +94,8 @@ def get_yt_dlp_options(output_path):
             'preferredcodec': AUDIO_FORMAT,
             'preferredquality': AUDIO_QUALITY,
         }],
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,
+        'no_warnings': False,
         'progress_hooks': [download_progress_hook],
         'retries': 3,
     }
@@ -306,8 +306,8 @@ Path(output2_mp3).parent.mkdir(parents=True, exist_ok=True)
 try:
     # Search
     search_opts = {
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,
+        'no_warnings': False,
         'extract_flat': True,
         'default_search': 'ytsearch5',
     }
