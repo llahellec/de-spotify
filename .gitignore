@@ -66,6 +66,7 @@ data/**
 
 # Logs
 *.log
+logs/
 
 # OS
 Thumbs.db
