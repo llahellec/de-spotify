@@ -16,9 +16,11 @@ import re
 import unicodedata
 
 import os
+import sys
 import time
 import random
 import re
+import shutil
 import pandas as pd
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
@@ -51,10 +53,39 @@ load_dotenv()
 CONSUMER_KEY = os.getenv("DISCOGS_CONSUMER_KEY")
 CONSUMER_SECRET = os.getenv("DISCOGS_CONSUMER_SECRET")
 
+# Validate credentials at startup
+if not CONSUMER_KEY or not CONSUMER_SECRET:
+    print("=" * 60)
+    print("ERROR: Discogs API credentials not found!")
+    print("=" * 60)
+    print("\nPlease set up your .env file with:")
+    print("  DISCOGS_CONSUMER_KEY=your_key_here")
+    print("  DISCOGS_CONSUMER_SECRET=your_secret_here")
+    print("\nGet credentials at: https://www.discogs.com/settings/developers")
+    print("=" * 60)
+    sys.exit(1)
+
 DISCOGS_SEARCH_LIMIT = 3
-API_CALL_DELAY = 1.2  # must be applied before EVERY request
+API_CALL_DELAY = 2.0  # Increased from 1.2 to be safer with rate limits
 
 USER_AGENT = "Happyapi/1.0 (loic.lahellec@dauphine.eu)"
+
+
+def atomic_save_csv(df: pd.DataFrame, filepath: Path) -> bool:
+    """Save DataFrame to CSV atomically to prevent data corruption."""
+    try:
+        temp_path = filepath.with_suffix('.csv.tmp')
+        df.to_csv(temp_path, index=False)
+        shutil.move(str(temp_path), str(filepath))
+        return True
+    except Exception as e:
+        print(f"[WARNING] Failed to save CSV: {e}")
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except:
+            pass
+        return False
 
 
 def _sleep_api():
@@ -498,7 +529,7 @@ def update_yt_links_with_discogs(
     else:
         print("Nothing to do: no rows match todo_mask (missing yt_url and not done/no_yt).")
         # Still save to ensure columns exist if it was the first run
-        df.to_csv(output_csv, index=False)
+        atomic_save_csv(df, output_csv)
         print(f"Data saved to: {output_csv}")
         return
 
@@ -550,7 +581,7 @@ def update_yt_links_with_discogs(
                     df.at[ridx, "status"] = "no_yt"
 
             # Save AFTER each album so restart always resumes correctly
-            df.to_csv(output_csv, index=False)
+            atomic_save_csv(df, output_csv)
             print("  -> Saved (album checkpoint).")
         else:
             print(f"  -> Videos returned: {len(videos)}. Matching to tracks…")
@@ -576,12 +607,12 @@ def update_yt_links_with_discogs(
                         df.at[ridx, "status"] = "no_yt"
 
             # Save AFTER each album (strong resumability)
-            df.to_csv(output_csv, index=False)
+            atomic_save_csv(df, output_csv)
             print("  -> Saved (album checkpoint).")
 
         # Periodic “big” checkpoint message (even though we already save per album)
         if processed_albums % save_every_n_albums == 0:
-            df.to_csv(output_csv, index=False)
+            atomic_save_csv(df, output_csv)
             print(f"Checkpoint: saved after processing {processed_albums} albums.")
 
         # Time progress bar (same style as Songstats)
@@ -599,7 +630,7 @@ def update_yt_links_with_discogs(
         f"\nFinished run. Albums processed: {processed_albums}/{total_albums}, "
         f"Tracks updated: {updated_tracks}, Elapsed: {elapsed_minutes:.2f} minutes"
     )
-    df.to_csv(output_csv, index=False)
+    atomic_save_csv(df, output_csv)
     print(f"Data saved to: {output_csv}")
 
 

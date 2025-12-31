@@ -18,7 +18,7 @@ album = "the dark side of the moon"
 
 # Configuration
 DISCOGS_SEARCH_LIMIT = 3      # number of results to inspect in each search
-API_CALL_DELAY = 3          # pause before every API request (seconds)
+API_CALL_DELAY = 2.0  # Unified rate limit          # pause before every API request (seconds)
 
 def search_album_discogs(artist, title, key, secret):
     """Search by separate artist and release_title fields, restricted to masters."""

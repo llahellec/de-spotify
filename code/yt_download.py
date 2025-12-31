@@ -32,6 +32,8 @@ import os
 import re
 import time
 import random
+import shutil
+import tempfile
 import pandas as pd
 import requests
 from pathlib import Path
@@ -81,6 +83,12 @@ DURATION_TOLERANCE_SECONDS = 30  # Or 30 seconds, whichever is greater
 SLEEP_BETWEEN_DOWNLOADS = (3, 6)  # Random sleep range in seconds
 SLEEP_BETWEEN_SEARCHES = (2, 4)  # Sleep when using ytsearch
 
+# Anti-detection / Rate limit protection
+MAX_CONSECUTIVE_FAILURES = 5  # Pause after this many failures in a row
+RATE_LIMIT_PAUSE_MINUTES = 15  # How long to pause when rate limited
+LONG_PAUSE_EVERY_N = 25  # Take a long break every N downloads
+LONG_PAUSE_RANGE = (60, 180)  # Long pause duration range (1-3 minutes)
+
 # Audio quality settings
 AUDIO_FORMAT = "mp3"
 AUDIO_QUALITY = "0"  # 0 = best quality (320kbps for mp3 if available)
@@ -98,6 +106,29 @@ download_dir = folder_path / "downloads"
 # ---------------------------
 #  3. Helper Functions
 # ---------------------------
+
+def atomic_save_csv(df: pd.DataFrame, filepath: Path) -> bool:
+    """
+    Save DataFrame to CSV atomically to prevent data corruption.
+    Writes to temp file first, then moves to final location.
+    """
+    try:
+        # Create temp file in same directory (for atomic move)
+        temp_path = filepath.with_suffix('.csv.tmp')
+        df.to_csv(temp_path, index=False)
+        # Atomic move (on same filesystem)
+        shutil.move(str(temp_path), str(filepath))
+        return True
+    except Exception as e:
+        print(f"       [WARNING] Failed to save CSV: {e}")
+        # Try to clean up temp file
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except:
+            pass
+        return False
+
 
 def sanitize_filename(name: str) -> str:
     """Remove or replace characters that are invalid in filenames."""
@@ -694,6 +725,8 @@ def main():
     downloaded = 0
     failed = 0
     searched = 0
+    consecutive_failures = 0  # Track failures for rate limit detection
+    total_downloaded_session = 0  # For long pause logic
 
     for n, i in enumerate(todo_idx, start=1):
         elapsed = time.time() - start_time
@@ -757,7 +790,7 @@ def main():
                     df.at[i, "metadata_embedded"] = "yes"
                     print(f"       Metadata embedded successfully!")
 
-            df.to_csv(output_csv, index=False)
+            atomic_save_csv(df, output_csv)
             processed += 1
             downloaded += 1
             continue
@@ -814,6 +847,8 @@ def main():
         if success:
             df.at[i, "downloaded"] = "yes"
             downloaded += 1
+            total_downloaded_session += 1
+            consecutive_failures = 0  # Reset on success
             print(f"\n       >>> DOWNLOAD SUCCESS! <<<")
 
             # Embed metadata during sleep time
@@ -839,13 +874,26 @@ def main():
         else:
             df.at[i, "downloaded"] = "no"
             failed += 1
+            consecutive_failures += 1
             print(f"\n       >>> FAILED: {status} <<<")
+
+            # Check for possible rate limiting / IP ban
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                print(f"\n{'='*60}")
+                print(f"WARNING: {consecutive_failures} consecutive failures detected!")
+                print(f"Possible rate limiting or IP ban.")
+                print(f"Pausing for {RATE_LIMIT_PAUSE_MINUTES} minutes...")
+                print(f"{'='*60}")
+                atomic_save_csv(df, output_csv)  # Save before pause
+                time.sleep(RATE_LIMIT_PAUSE_MINUTES * 60)
+                consecutive_failures = 0  # Reset after pause
+                print(f"Resuming downloads...")
 
         processed += 1
 
         # Save progress (every SAVE_EVERY_N downloads)
         if processed % SAVE_EVERY_N == 0:
-            df.to_csv(output_csv, index=False)
+            atomic_save_csv(df, output_csv)
             print(f"\n       [Checkpoint saved to {output_csv.name}]")
 
         # Progress bar (time-based)
@@ -864,8 +912,17 @@ def main():
             print(f"   Sleeping {sleep_time:.1f}s before next download...")
             time.sleep(sleep_time)
 
+            # Take a longer break every N downloads to avoid detection
+            if total_downloaded_session > 0 and total_downloaded_session % LONG_PAUSE_EVERY_N == 0:
+                long_pause = random.uniform(*LONG_PAUSE_RANGE)
+                print(f"\n   {'='*50}")
+                print(f"   Taking a longer break ({long_pause:.0f}s) after {total_downloaded_session} downloads...")
+                print(f"   This helps avoid rate limiting.")
+                print(f"   {'='*50}")
+                time.sleep(long_pause)
+
     # Final save
-    df.to_csv(output_csv, index=False)
+    atomic_save_csv(df, output_csv)
     print(f"\nProgress saved to: {output_csv}")
 
     # Summary

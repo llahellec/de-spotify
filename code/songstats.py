@@ -21,6 +21,7 @@ import os
 import time
 import random
 import re
+import shutil
 import pandas as pd
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -39,6 +40,23 @@ MAX_RUNTIME_MINUTES = 300 # how many minutes to run before stopping
 folder_path = Path(__file__).resolve().parents[1]
 input_csv = folder_path / "data/spotify_playlists/main/liked.csv"
 output_csv = folder_path / "data/spotify_playlists/main/liked_yt_songstats.csv"
+
+
+def atomic_save_csv(df: pd.DataFrame, filepath: Path) -> bool:
+    """Save DataFrame to CSV atomically to prevent data corruption."""
+    try:
+        temp_path = filepath.with_suffix('.csv.tmp')
+        df.to_csv(temp_path, index=False)
+        shutil.move(str(temp_path), str(filepath))
+        return True
+    except Exception as e:
+        print(f"[WARNING] Failed to save CSV: {e}")
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except:
+            pass
+        return False
 
 # --- load ---
 csv_to_load = output_csv if os.path.exists(output_csv) else input_csv
@@ -157,7 +175,6 @@ def fetch_youtube_via_selenium(isrc: str, driver: webdriver.Remote,
 # --- Selenium setup (non-headless or headless as desired) ---
 options = webdriver.FirefoxOptions()
 #options.add_argument("--headless")  # remove this line if you don't want headless
-driver = webdriver.Firefox(options=options)
 
 # --- resumable loop settings ---
 SAVE_EVERY_N = 25
@@ -185,58 +202,73 @@ if todo_idx:
 print(f"Rows total: {len(df)}")
 print(f"Todo rows:  {total_todo}\n")
 
-for n, i in enumerate(todo_idx, start=1):
-    elapsed = time.time() - start_time
-    if elapsed > max_runtime_seconds:
-        print(f"Maximum runtime of {MAX_RUNTIME_MINUTES} minutes reached. Stopping gracefully.")
-        break
-    if MAX_ROWS_THIS_RUN is not None and processed >= MAX_ROWS_THIS_RUN:
-        break
+# Use try/finally to ensure WebDriver is always cleaned up
+driver = None
+try:
+    driver = webdriver.Firefox(options=options)
 
-    isrc = df.at[i, "isrc"].strip()
-    print(f"[{n}/{total_todo}] Processing index {i}, ISRC: '{isrc}'")
+    for n, i in enumerate(todo_idx, start=1):
+        elapsed = time.time() - start_time
+        if elapsed > max_runtime_seconds:
+            print(f"Maximum runtime of {MAX_RUNTIME_MINUTES} minutes reached. Stopping gracefully.")
+            break
+        if MAX_ROWS_THIS_RUN is not None and processed >= MAX_ROWS_THIS_RUN:
+            break
 
-    if not isrc:
-        df.at[i, "status"] = "no_isrc"
+        isrc = df.at[i, "isrc"].strip()
+        print(f"[{n}/{total_todo}] Processing index {i}, ISRC: '{isrc}'")
+
+        if not isrc:
+            df.at[i, "status"] = "no_isrc"
+            processed += 1
+            print(" -> No ISRC found. Marked as 'no_isrc'.")
+            continue
+
+        try:
+            yt_url = fetch_youtube_via_selenium(isrc, driver, load_wait=7, redirect_timeout=15)
+            if yt_url:
+                df.at[i, "yt_url"] = yt_url
+                df.at[i, "status"] = "done"
+                df.at[i, "yt_url_origin"] = "songstats"
+                updated += 1
+                print(f" -> Found YouTube URL: {yt_url}")
+            else:
+                df.at[i, "status"] = "no_yt"
+                print(" -> No YouTube link found on the page.")
+        except Exception as e:
+            df.at[i, "status"] = "error"
+            print(f" -> Exception occurred while processing {isrc}: {e}")
+
+        # Always save after each row (atomic save)
+        atomic_save_csv(df, output_csv)
+
         processed += 1
-        print(" -> No ISRC found. Marked as 'no_isrc'.")
-        continue
 
-    try:
-        yt_url = fetch_youtube_via_selenium(isrc, driver, load_wait=7, redirect_timeout=15)
-        if yt_url:
-            df.at[i, "yt_url"] = yt_url
-            df.at[i, "status"] = "done"
-            df.at[i, "yt_url_origin"] = "songstats"
-            updated += 1
-            print(f" -> Found YouTube URL: {yt_url}")
-        else:
-            df.at[i, "status"] = "no_yt"
-            print(" -> No YouTube link found on the page.")
-        df.to_csv(output_csv, index=False)
-    except Exception as e:
-        df.at[i, "status"] = "error"
-        print(f" -> Exception occurred while processing {isrc}: {e}")
+        if processed % SAVE_EVERY_N == 0:
+            print(f"Checkpoint: saved after processing {processed} rows.")
 
-    processed += 1
+        # Show time-based progress bar
+        progress = min(1.0, (time.time() - start_time) / max_runtime_seconds)
+        bar_length = 20
+        filled = int(bar_length * progress)
+        bar = "█" * filled + "-" * (bar_length - filled)
+        print(f"Time Progress: |{bar}| {progress*100:.1f}%")
 
-    if processed % SAVE_EVERY_N == 0:
-        df.to_csv(output_csv, index=False)
-        print(f"Checkpoint: saved after processing {processed} rows.")
+        time.sleep(BASE_SLEEP_SECONDS + random.uniform(0, 1.0))
 
-    # Show time-based progress bar
-    progress = min(1.0, (time.time() - start_time) / max_runtime_seconds)
-    bar_length = 20
-    filled = int(bar_length * progress)
-    bar = "█" * filled + "-" * (bar_length - filled)
-    print(f"Time Progress: |{bar}| {progress*100:.1f}%")
+finally:
+    # Always cleanup WebDriver, even if script crashes
+    if driver is not None:
+        try:
+            driver.quit()
+            print("WebDriver closed.")
+        except Exception as e:
+            print(f"Error closing WebDriver: {e}")
 
-    time.sleep(BASE_SLEEP_SECONDS + random.uniform(0, 1.0))
+    # Final save
+    atomic_save_csv(df, output_csv)
 
 elapsed_minutes = (time.time() - start_time) / 60
 print(f"\nFinished run. Processed rows: {processed}, Updated yt_url: {updated}, "
       f"Elapsed time: {elapsed_minutes:.2f} minutes")
-
-driver.quit()
-df.to_csv(output_csv, index=False)
 print(f"Data saved to: {output_csv}")
