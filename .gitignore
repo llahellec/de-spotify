@@ -68,3 +68,12 @@ Thumbs.db
 *.tmp
 temp/
 tmp/
+
+# Generated analysis files
+*.html
+
+# Local batch files with hardcoded paths
+run_test.bat
+
+# Claude Code
+.claude/
