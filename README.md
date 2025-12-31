@@ -12,7 +12,7 @@ Instead: Own your music, support artists directly ([Bandcamp](https://bandcamp.c
 
 **The problem:** Fixed cost of switching is high when you have thousands of saved songs.
 
-**The solution:** De-Spotify is a bridge. Export your library to MP3s via [yt-dlp](https://github.com/yt-dlp/yt-dlp)) with full metadata, stop streaming today, rebuild properly over time. A base layer to leave streaming now.
+**The solution:** De-Spotify is a bridge. Export your library to MP3s via [yt-dlp](https://github.com/yt-dlp/yt-dlp) with full metadata, stop streaming today, rebuild properly over time. A base layer to leave streaming now.
 
 ---
 
@@ -294,6 +294,7 @@ Contributions are welcome! Please ensure any changes:
 ## License
 
 MIT License - This software is provided "as is", without warranty of any kind. Use at your own risk.
+
 
 
 
