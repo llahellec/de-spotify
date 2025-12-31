@@ -6,7 +6,7 @@
 
 ## Why?
 
-You know what streaming has become. Own your music, support artists directly like on [Bandcamp](https://bandcamp.com), CD rips, FLAC on your hard drive.
+You know what streaming has become. Own your music, support artists directly like on sites like [Bandcamp](https://bandcamp.com), CD rips, FLAC on your hard drive.
 
 **The problem:** Fixed cost of switching is high when you have thousands of saved songs.
 
@@ -292,5 +292,6 @@ Contributions are welcome! Please ensure any changes:
 ## License
 
 MIT License - This software is provided "as is", without warranty of any kind. Use at your own risk.
+
 
 
