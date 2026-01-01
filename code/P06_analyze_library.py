@@ -20,7 +20,7 @@ from datetime import datetime
 
 # Paths
 folder_path = Path(__file__).resolve().parents[1]
-master_csv = folder_path / "data/spotify_playlists/main/liked_master.csv"
+master_csv = folder_path / "data/spotify_playlists/main/liked_master_temp.csv"
 output_html = folder_path / "music_library_analysis.html"
 
 print("=" * 70)

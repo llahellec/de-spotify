@@ -251,8 +251,8 @@ if missing_urls > 0:
     if no_yt_count > 0:
         print(f"\n  {Colors.BOLD}2. Manual Search Needed{Colors.END}")
         print(f"     • {no_yt_count:,} tracks were not found on Songstats or Discogs")
+        print(f"     • {no_yt_count:,} Will be searched with yt_dlp search feature. If these are too many, risk of overuse and yt throttling")        
         print(f"     • Consider direct YouTube search for these tracks")
-        print(f"     • May require manual playlist creation")
 
     print(f"\n  {Colors.BOLD}3. Alternative Sources{Colors.END}")
     print(f"     • Try other metadata sources (MusicBrainz, Last.fm)")
@@ -274,6 +274,9 @@ else:
 # ============================================================================
 print_header("FINAL SUMMARY")
 
+print(f"If urls left empty the search function of yt_dlp will be activated on next code P05_yt_download")
+print(f"It is recommended to input as many valid urls as possible in order to make to workload smaller for the last step (download) to avoid throttling")
+print(f" ")
 print(f"{Colors.BOLD}Dataset Statistics:{Colors.END}")
 print(f"  • Total tracks:               {total_tracks:>6,}")
 print(f"  • URLs from Songstats:        {urls_from_songstats:>6,}  ({urls_from_songstats/total_tracks*100:>5.1f}%)")
