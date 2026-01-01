@@ -30,6 +30,7 @@ except (ImportError, AttributeError):
 
 import os
 import re
+import sys
 import time
 import random
 import shutil
@@ -84,7 +85,7 @@ except (FileNotFoundError, subprocess.CalledProcessError):
 # ---------------------------
 
 # Runtime settings
-MAX_RUNTIME_MINUTES = 60  # How long to run before stopping
+MAX_RUNTIME_MINUTES = 800  # How long to run before stopping
 SAVE_EVERY_N = 1  # Save CSV after every N downloads (1 = after each, fully resumable)
 MAX_DOWNLOADS_THIS_RUN = None  # Set to integer to limit, None for unlimited
 
@@ -115,8 +116,115 @@ output_csv = input_csv  # Single CSV workflow - update in place (same as URL scr
 download_dir = folder_path / "downloads"
 
 # ---------------------------
+#  2b. Authentication & Advanced yt-dlp Options
+# ---------------------------
+# These options help bypass bot detection, access age-restricted/private content,
+# and improve download reliability. See: https://github.com/yt-dlp/yt-dlp
+
+# COOKIE AUTHENTICATION (Critical for avoiding "Sign in to confirm you're not a bot")
+# Option 1: Auto-extract from browser (RECOMMENDED - easiest)
+#   Set to browser name: "chrome", "firefox", "edge", "brave", "opera", "safari", "chromium", "vivaldi"
+#   Set to None to disable browser cookie extraction
+COOKIES_FROM_BROWSER = "firefox"  # Auto-extract cookies from this browser
+
+# Option 2: Use exported cookies file (alternative to browser extraction)
+#   Export cookies using browser extension or: yt-dlp --cookies-from-browser chrome --cookies cookies.txt
+#   IMPORTANT: Export from a PRIVATE/INCOGNITO window, then close it immediately!
+#   See: https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies
+COOKIES_FILE = folder_path / "cookies.txt"  # Path to cookies.txt file (used if browser extraction fails/disabled)
+
+# YOUTUBE EXTRACTOR OPTIONS
+# Player clients to try (in order). Multiple clients = better fallback.
+# Available: "web", "web_safari", "web_embedded", "web_music", "web_creator",
+#            "android", "android_music", "android_creator", "android_vr",
+#            "ios", "ios_music", "ios_creator", "mweb", "tv", "tv_embedded", "mediaconnect"
+# "web" works best with cookies. "android" sometimes bypasses restrictions.
+YOUTUBE_PLAYER_CLIENTS = "web,android"  # Comma-separated list of clients to try
+
+# PO Token (Proof of Origin) - Required for some videos to avoid 403 errors
+# Format: "CLIENT.REQUEST_TYPE+TOKEN" e.g., "web.gvs+abc123..."
+# Get tokens using: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+# Or install plugin: pip install bgutil-ytdlp-pot-provider (auto-generates tokens)
+YOUTUBE_PO_TOKEN = None  # Set to token string if you have one, or None to skip
+
+# Visitor data (alternative to cookies for some requests)
+YOUTUBE_VISITOR_DATA = None  # Set to visitor_data string if needed, or None
+
+# NETWORK OPTIONS
+SOCKET_TIMEOUT = 30  # Connection timeout in seconds (default: None = no timeout)
+FORCE_IPV4 = True  # Force IPv4 connections (more stable on some networks)
+SOURCE_ADDRESS = None  # Bind to specific IP address (None = auto)
+
+# RETRY OPTIONS
+HTTP_RETRIES = 10  # Number of retries for HTTP errors (default: 10)
+FRAGMENT_RETRIES = 10  # Number of retries for fragment downloads (default: 10)
+EXTRACTOR_RETRIES = 5  # Number of retries for extractor errors (default: 3)
+FILE_ACCESS_RETRIES = 5  # Number of retries for file access errors (default: 3)
+RETRY_SLEEP_FUNCTIONS = "http:exp=1:30,fragment:exp=1:10"  # Exponential backoff: start 1s, max 30s/10s
+
+# WORKAROUND OPTIONS
+# Custom user agent - helps avoid detection. Set to None to use yt-dlp default.
+# Get yours from: https://www.whatismybrowser.com/detect/what-is-my-user-agent/
+USER_AGENT = None  # e.g., "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
+
+# Sleep between extraction requests (helps avoid rate limiting during search/info fetch)
+SLEEP_REQUESTS = 1.5  # Seconds to sleep between requests to same host (default: 0)
+
+# GEO-BYPASS OPTIONS
+GEO_BYPASS = True  # Bypass geographic restrictions using fake X-Forwarded-For header
+GEO_BYPASS_COUNTRY = None  # Two-letter country code (e.g., "US") or None for auto
+
+# AGE RESTRICTION
+AGE_LIMIT = None  # Max age rating to download (None = no limit, requires cookies for 18+)
+
+# CONCURRENT DOWNLOADS (for fragmented formats)
+CONCURRENT_FRAGMENTS = 4  # Number of fragments to download simultaneously (default: 1)
+
+# RATE LIMITING
+# THROTTLED_RATE - DISABLED (was causing type comparison errors)
+# THROTTLED_RATE = 100000  # Bytes per second (100KB/s)
+
+# IMPERSONATION (requires curl_cffi: pip install curl_cffi)
+# Impersonate browser TLS fingerprint to bypass advanced bot detection
+# Options: "chrome", "edge", "safari", or None to disable
+IMPERSONATE_BROWSER = None  # Set to browser name or None
+
+# ---------------------------
 #  3. Helper Functions
 # ---------------------------
+
+class Tee:
+    """Write output to multiple streams (e.g., console + file). Fail-safe."""
+    def __init__(self, console, log_file=None):
+        self.console = console
+        self.log_file = log_file
+
+    def write(self, text):
+        # Always write to console first
+        try:
+            self.console.write(text)
+            self.console.flush()
+        except:
+            pass
+        # Try log file, but don't fail if it errors
+        if self.log_file:
+            try:
+                self.log_file.write(text)
+                self.log_file.flush()
+            except:
+                pass  # Silently ignore log write errors
+
+    def flush(self):
+        try:
+            self.console.flush()
+        except:
+            pass
+        if self.log_file:
+            try:
+                self.log_file.flush()
+            except:
+                pass
+
 
 def atomic_save_csv(df: pd.DataFrame, filepath: Path) -> bool:
     """
@@ -443,8 +551,128 @@ class DownloadProgress:
             print(f"\r       Download complete, converting to {AUDIO_FORMAT}...                    ")
 
 
+# Global cache for cookie settings (extracted once, reused throughout session)
+_cached_cookie_settings = None
+_session_cookie_file = None  # Temp file for cached cookies
+
+
+def extract_and_cache_cookies() -> str | None:
+    """
+    Extract cookies from browser ONCE and save to a temp file.
+    Returns path to the cached cookie file, or None if extraction fails.
+    """
+    global _session_cookie_file
+
+    if _session_cookie_file and Path(_session_cookie_file).exists():
+        return _session_cookie_file
+
+    if not COOKIES_FROM_BROWSER:
+        return None
+
+    try:
+        import tempfile
+
+        # Create temp cookie file in the project's logs directory for easy debugging
+        cookie_cache_dir = folder_path / "logs" / ".cookie_cache"
+        cookie_cache_dir.mkdir(parents=True, exist_ok=True)
+        temp_cookie_path = cookie_cache_dir / f"session_cookies_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+
+        print(f"[Cookies] Extracting from {COOKIES_FROM_BROWSER}...")
+
+        # Use yt-dlp to extract and save cookies
+        opts = {
+            'cookiesfrombrowser': (COOKIES_FROM_BROWSER,),
+            'cookiefile': str(temp_cookie_path),
+            'quiet': True,
+            'skip_download': True,
+            'simulate': True,
+        }
+
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            # Just initializing extracts and saves cookies
+            pass
+
+        if temp_cookie_path.exists():
+            _session_cookie_file = str(temp_cookie_path)
+            cookie_count = sum(1 for line in open(temp_cookie_path) if not line.startswith('#') and line.strip())
+            print(f"[Cookies] Cached {cookie_count} cookies to: {temp_cookie_path.name}")
+            return _session_cookie_file
+        else:
+            print(f"[Cookies] WARNING: Cookie extraction failed")
+            return None
+
+    except Exception as e:
+        print(f"[Cookies] ERROR extracting cookies: {e}")
+        return None
+
+
+def get_cookie_settings(force_refresh: bool = False) -> dict:
+    """
+    Determine cookie settings based on configuration.
+    Returns dict with 'cookiefile' key (using cached cookies), or empty dict.
+
+    Cookies are extracted ONCE from browser and cached for the entire session.
+    Use force_refresh=True to re-extract (e.g., if cookies expired).
+    """
+    global _cached_cookie_settings
+
+    # Return cached settings if available (unless refresh requested)
+    if _cached_cookie_settings is not None and not force_refresh:
+        return _cached_cookie_settings
+
+    settings = {}
+
+    # Try to use cached session cookies (extracted from browser once)
+    if _session_cookie_file and Path(_session_cookie_file).exists():
+        settings['cookiefile'] = _session_cookie_file
+        _cached_cookie_settings = settings
+        return settings
+
+    # Fall back to configured cookies file (if exists)
+    if COOKIES_FILE and Path(COOKIES_FILE).exists():
+        settings['cookiefile'] = str(COOKIES_FILE)
+        _cached_cookie_settings = settings
+        return settings
+
+    # Last resort: extract from browser each time (slower but works)
+    if COOKIES_FROM_BROWSER:
+        settings['cookiesfrombrowser'] = (COOKIES_FROM_BROWSER,)
+        _cached_cookie_settings = settings
+        return settings
+
+    _cached_cookie_settings = settings
+    return settings
+
+
+def build_extractor_args() -> dict:
+    """
+    Build extractor arguments for YouTube.
+    Returns dict for yt-dlp 'extractor_args' option.
+    """
+    youtube_args = []
+
+    # Player client selection
+    if YOUTUBE_PLAYER_CLIENTS:
+        youtube_args.append(f"player_client={YOUTUBE_PLAYER_CLIENTS}")
+
+    # PO Token for bypassing 403 errors
+    if YOUTUBE_PO_TOKEN:
+        youtube_args.append(f"po_token={YOUTUBE_PO_TOKEN}")
+
+    # Visitor data (alternative authentication)
+    if YOUTUBE_VISITOR_DATA:
+        youtube_args.append(f"visitor_data={YOUTUBE_VISITOR_DATA}")
+
+    if youtube_args:
+        return {'youtube': youtube_args}
+    return {}
+
+
 def get_yt_dlp_options(output_template: str, progress_hook=None) -> dict:
-    """Build yt-dlp options dictionary."""
+    """
+    Build comprehensive yt-dlp options dictionary.
+    Includes all authentication, network, and anti-detection settings.
+    """
     opts = {
         # Audio extraction
         'format': 'bestaudio/best',
@@ -477,16 +705,56 @@ def get_yt_dlp_options(output_template: str, progress_hook=None) -> dict:
         'ignoreerrors': False,
         'no_overwrites': True,  # Don't re-download existing files
 
-        # Network options
-        'retries': 3,
-        'fragment_retries': 3,
+        # ===== NETWORK OPTIONS =====
+        'retries': HTTP_RETRIES,
+        'fragment_retries': FRAGMENT_RETRIES,
+        'extractor_retries': EXTRACTOR_RETRIES,
+        'file_access_retries': FILE_ACCESS_RETRIES,
         'skip_unavailable_fragments': True,
 
-        # Avoid detection
+        # Socket and connection settings
+        'socket_timeout': SOCKET_TIMEOUT,
+
+        # ===== ANTI-DETECTION / WORKAROUND OPTIONS =====
+        # Sleep intervals (randomized to appear more human)
         'sleep_interval': 1,
         'max_sleep_interval': 3,
     }
 
+    # ===== COOKIE AUTHENTICATION =====
+    cookie_settings = get_cookie_settings()
+    opts.update(cookie_settings)
+
+    # ===== YOUTUBE EXTRACTOR ARGS =====
+    extractor_args = build_extractor_args()
+    if extractor_args:
+        opts['extractor_args'] = extractor_args
+
+    # ===== NETWORK: IPv4/IPv6 =====
+    if FORCE_IPV4:
+        opts['source_address'] = '0.0.0.0'  # Forces IPv4
+    elif SOURCE_ADDRESS:
+        opts['source_address'] = SOURCE_ADDRESS
+
+    # ===== USER AGENT =====
+    if USER_AGENT:
+        opts['http_headers'] = {'User-Agent': USER_AGENT}
+
+    # ===== GEO-BYPASS =====
+    if GEO_BYPASS:
+        opts['geo_bypass'] = True
+        if GEO_BYPASS_COUNTRY:
+            opts['geo_bypass_country'] = GEO_BYPASS_COUNTRY
+
+    # ===== AGE LIMIT =====
+    if AGE_LIMIT is not None:
+        opts['age_limit'] = AGE_LIMIT
+
+    # ===== IMPERSONATION (requires curl_cffi) =====
+    if IMPERSONATE_BROWSER:
+        opts['impersonate'] = IMPERSONATE_BROWSER
+
+    # ===== PROGRESS HOOK =====
     if progress_hook:
         opts['progress_hooks'] = [progress_hook]
 
@@ -531,7 +799,14 @@ def download_from_url(url: str, output_template: str, track_name: str, expected_
         error_msg = str(e).lower()
         print(f"       Download error: {str(e)[:80]}")
 
-        if "private" in error_msg:
+        # Categorize errors for proper retry logic
+        if "sign in" in error_msg and "bot" in error_msg:
+            # "Sign in to confirm you're not a bot" - needs cookies
+            return False, "sign_in_required", 0, ""
+        elif "sign in" in error_msg:
+            # Generic sign-in required
+            return False, "sign_in_required", 0, ""
+        elif "private" in error_msg:
             return False, "private_video", 0, ""
         elif "unavailable" in error_msg or "removed" in error_msg:
             return False, "unavailable", 0, ""
@@ -541,8 +816,10 @@ def download_from_url(url: str, output_template: str, track_name: str, expected_
             return False, "copyright_blocked", 0, ""
         elif "403" in error_msg or "forbidden" in error_msg:
             return False, "http_403_po_token_needed", 0, ""
+        elif "429" in error_msg or "too many" in error_msg:
+            return False, "rate_limited", 0, ""
         else:
-            return False, f"download_error", 0, ""
+            return False, "download_error", 0, ""
 
     except Exception as e:
         print(f"       Exception: {str(e)[:80]}")
@@ -556,13 +833,23 @@ def search_and_download(search_query: str, output_template: str, track_name: str
     """
     progress = DownloadProgress(track_name)
 
-    # First, search and get candidates
+    # First, search and get candidates (include cookies for authenticated search)
     search_opts = {
         'quiet': False,
         'no_warnings': False,
         'extract_flat': True,
         'default_search': 'ytsearch5',  # Get top 5 results
+        'socket_timeout': SOCKET_TIMEOUT,
+        'sleep_interval_requests': SLEEP_REQUESTS,
     }
+
+    # Add cookie settings to search (helps with personalized/restricted results)
+    search_opts.update(get_cookie_settings())
+
+    # Add extractor args
+    extractor_args = build_extractor_args()
+    if extractor_args:
+        search_opts['extractor_args'] = extractor_args
 
     try:
         print(f"       Searching YouTube: '{search_query}'...")
@@ -636,7 +923,25 @@ def search_and_download(search_query: str, output_template: str, track_name: str
 # ---------------------------
 
 def main():
+    # Set up logging to file + console (fail-safe: won't break script)
+    log_file = None
+    run_log_dir = None
+    try:
+        run_timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        run_log_dir = folder_path / "logs" / run_timestamp
+        run_log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = open(run_log_dir / "output.log", "w", encoding="utf-8")
+        sys.stdout = Tee(sys.__stdout__, log_file)
+        sys.stderr = Tee(sys.__stderr__, log_file)
+    except Exception as e:
+        print(f"[Warning] Could not set up logging: {e}")
+        print("[Warning] Continuing without file logging...")
+        log_file = None
+
     print_separator("=")
+    if run_log_dir:
+        print(f"Log file: {run_log_dir / 'output.log'}")
+        print_separator("=")
     print("YT-DLP MUSIC DOWNLOADER")
     print_separator("=")
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -645,6 +950,46 @@ def main():
     print(f"Save frequency: Every {SAVE_EVERY_N} download(s)")
     print(f"Metadata embedding: {'ENABLED' if EMBED_METADATA and MUTAGEN_AVAILABLE else 'DISABLED'}")
     print(f"Album art embedding: {'ENABLED' if EMBED_ALBUM_ART and MUTAGEN_AVAILABLE else 'DISABLED'}")
+
+    # Extract and cache cookies ONCE at startup (instead of every download)
+    print()
+    print_separator("-")
+    print("COOKIE EXTRACTION")
+    print_separator("-")
+    extract_and_cache_cookies()
+
+    # Show authentication status
+    print()
+    print_separator("-")
+    print("AUTHENTICATION STATUS")
+    print_separator("-")
+    cookie_settings = get_cookie_settings()
+    if 'cookiefile' in cookie_settings:
+        cookie_source = cookie_settings['cookiefile']
+        if _session_cookie_file and cookie_source == _session_cookie_file:
+            print(f"  Cookies: CACHED from {COOKIES_FROM_BROWSER} (extracted once)")
+        else:
+            print(f"  Cookies: FROM FILE ({cookie_source})")
+        print(f"           Age-restricted & private videos: ENABLED")
+    elif 'cookiesfrombrowser' in cookie_settings:
+        print(f"  Cookies: FROM BROWSER ({COOKIES_FROM_BROWSER}) - extracting each time")
+        print(f"           Age-restricted & private videos: ENABLED")
+    else:
+        print(f"  Cookies: NOT CONFIGURED")
+        print(f"           WARNING: May encounter 'Sign in to confirm you're not a bot' errors")
+        print(f"           WARNING: Age-restricted & private videos will FAIL")
+        if COOKIES_FROM_BROWSER:
+            print(f"           Configured browser '{COOKIES_FROM_BROWSER}' not accessible")
+        if COOKIES_FILE:
+            print(f"           Cookies file not found: {COOKIES_FILE}")
+
+    if YOUTUBE_PLAYER_CLIENTS:
+        print(f"  YouTube clients: {YOUTUBE_PLAYER_CLIENTS}")
+    if YOUTUBE_PO_TOKEN:
+        print(f"  PO Token: CONFIGURED")
+    if GEO_BYPASS:
+        print(f"  Geo-bypass: ENABLED")
+    print_separator("-")
     print()
 
     # Create download directory if it doesn't exist
@@ -680,15 +1025,34 @@ def main():
         print(">>> RESUMING from previous session <<<")
 
     # Identify tracks to process
-    # Skip already downloaded and permanent failures
-    permanent_failures = ["private_video", "unavailable", "copyright_blocked", "age_restricted"]
+    # Skip already downloaded and truly permanent failures
+
+    # Truly permanent failures (video doesn't exist or blocked - cookies won't help)
+    permanent_failures = ["unavailable", "copyright_blocked"]
+
+    # Cookie-dependent failures (might work NOW with cookies enabled)
+    # These will be retried if cookies are configured
+    cookie_dependent_failures = ["private_video", "age_restricted", "sign_in_required"]
+
+    # Determine which failures to skip
+    if cookie_settings:
+        # Cookies enabled - only skip truly permanent failures
+        # This means previously failed private/age-restricted will be RETRIED
+        skip_statuses = permanent_failures
+        cookie_retry_count = df["download_status"].isin(cookie_dependent_failures).sum()
+        if cookie_retry_count > 0:
+            print(f"\n>>> COOKIES ENABLED: Will retry {cookie_retry_count} previously failed tracks <<<")
+            print(f"    (private_video, age_restricted, sign_in_required)")
+    else:
+        # No cookies - skip both permanent and cookie-dependent failures
+        skip_statuses = permanent_failures + cookie_dependent_failures
 
     # A track needs processing if:
     # 1. Not yet downloaded (downloaded != "yes")
-    # 2. Not a permanent failure status
+    # 2. Not a permanent/skipped failure status
     needs_processing = (
         (df["downloaded"].str.strip() != "yes") &
-        (~df["download_status"].isin(permanent_failures))
+        (~df["download_status"].isin(skip_statuses))
     )
 
     # Tracks that can be downloaded:
@@ -823,9 +1187,19 @@ def main():
                 yt_url, output_template, track_name, duration_ms
             )
 
-            # FALLBACK: If duration mismatch, try YouTube search to find correct version
-            if not success and status == "duration_mismatch":
-                print(f"\n       Duration mismatch detected - trying YouTube search fallback...")
+            # FALLBACK: If URL fails for recoverable reasons, try YouTube search
+            # These failures might be resolved by finding an alternative upload
+            searchable_failures = [
+                "duration_mismatch",      # Wrong video at URL
+                "private_video",          # Video went private
+                "unavailable",            # Video deleted/removed
+                "http_403_po_token_needed",  # Access denied, try different upload
+                "download_error",         # Generic error, might find alternative
+                "copyright_blocked",      # Might find different upload
+            ]
+
+            if not success and status in searchable_failures:
+                print(f"\n       URL failed ({status}) - trying YouTube search fallback...")
                 searched += 1
                 search_query = build_search_query(track_name, artist_names)
                 print(f"       Search query: '{search_query}'")
@@ -835,9 +1209,15 @@ def main():
                 print(f"       Waiting {sleep_time:.1f}s before search...")
                 time.sleep(sleep_time)
 
-                success, status, found_url, actual_duration = search_and_download(
+                success, search_status, found_url, actual_duration = search_and_download(
                     search_query, output_template, track_name, duration_ms
                 )
+
+                # Update status to reflect search attempt
+                if success:
+                    status = f"search_fallback_from_{status}"
+                else:
+                    status = f"{status}_search_failed"
 
                 if found_url:
                     df.at[i, "searched_url"] = found_url
@@ -977,6 +1357,16 @@ def main():
 
     print("\nTo continue downloading, simply run this script again!")
     print(f"Command: python {Path(__file__).name}")
+
+    # Cleanup: restore stdout/stderr and close log file
+    try:
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+        if log_file:
+            log_file.close()
+            print(f"Log saved to: {run_log_dir / 'output.log'}")
+    except:
+        pass
 
 
 if __name__ == "__main__":

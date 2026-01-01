@@ -249,6 +249,50 @@ Edit the following settings in `yt_download.py`:
 
 > **Note**: The sleep delays are intentionally set to be respectful of YouTube's servers. Reducing them may result in IP blocks or CAPTCHA challenges.
 
+### Cookie Authentication (CRITICAL)
+
+**Why Cookies?** YouTube's bot detection has become aggressive. Without cookies, you'll see "Sign in to confirm you're not a bot" errors after ~150 downloads. Cookies also enable:
+- Access to age-restricted content
+- Access to private videos (if you have permission)
+- Higher rate limits for authenticated users
+
+**Two Methods (choose one):**
+
+#### Option 1: Auto-Extract from Browser (Recommended)
+
+Set `COOKIES_FROM_BROWSER` in `yt_download.py`:
+
+```python
+COOKIES_FROM_BROWSER = "chrome"  # or "firefox", "edge", "brave", etc.
+```
+
+This automatically extracts cookies from your browser. **You must be logged into YouTube in that browser.**
+
+#### Option 2: Use a Cookies File
+
+1. **Export cookies** using the [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) extension
+2. **IMPORTANT:** Export from a **private/incognito window** after logging into YouTube
+3. Save as `cookies.txt` in the project root
+4. Set in `yt_download.py`:
+   ```python
+   COOKIES_FROM_BROWSER = None  # Disable browser extraction
+   COOKIES_FILE = folder_path / "cookies.txt"  # Use file instead
+   ```
+
+**Account Warning:** Using your account with yt-dlp carries a small risk of temporary/permanent ban. Consider using a secondary account.
+
+### Advanced Options
+
+Additional options in `yt_download.py` for troubleshooting:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `YOUTUBE_PLAYER_CLIENTS` | `"web,android"` | YouTube API clients to try (fallback order) |
+| `YOUTUBE_PO_TOKEN` | `None` | Proof of Origin token for 403 errors |
+| `GEO_BYPASS` | `True` | Bypass geographic restrictions |
+| `FORCE_IPV4` | `True` | Force IPv4 connections (more stable) |
+| `IMPERSONATE_BROWSER` | `None` | Impersonate browser TLS fingerprint |
+
 ### Output
 
 - **Downloads:** `downloads/Artist/Album/Track.mp3`
